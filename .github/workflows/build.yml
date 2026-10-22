@@ -1,0 +1,93 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x64
+            qt-arch: linux_gcc_64
+            cmake-args: ""
+          - os: windows-2022
+            name: windows-x64
+            qt-arch: win64_msvc2022_64
+            cmake-args: ""
+          - os: macos-14
+            name: macos-universal
+            qt-arch: clang_64
+            cmake-args: '"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: "6.10.3"
+        arch: ${{ matrix.qt-arch }}
+        cache: true
+
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: >
+        sudo apt-get update && sudo apt-get install -y
+        libx11-dev libxkbcommon-dev libgl1-mesa-dev xvfb
+        libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0
+        libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0
+
+    - name: Configure CMake
+      shell: bash
+      run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake-args }}
+
+    - name: Build
+      run: cmake --build build --config Release --parallel
+
+    # Qt's deploy tool refuses a relative prefix
+    - name: Make portable folder
+      run: cmake --install build --config Release --prefix "${{ github.workspace }}/dist"
+
+    # --list-playing starts the app, runs the OS's media detector once and exits: proves it links and loads
+    - name: Smoke test (Linux)
+      if: runner.os == 'Linux'
+      run: xvfb-run -a ./dist/bin/AutomaticPassiveImmersion --list-playing
+
+    - name: Smoke test (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: ./dist/bin/AutomaticPassiveImmersion.exe --list-playing
+
+    - name: Smoke test (macOS)
+      if: runner.os == 'macOS'
+      run: ./dist/AutomaticPassiveImmersion.app/Contents/MacOS/AutomaticPassiveImmersion --list-playing
+
+    # Archived by hand: upload-artifact's own zipping drops the symlinks and exec bits a .app needs
+    - name: Archive (Linux)
+      if: runner.os == 'Linux'
+      run: tar -czf AutomaticPassiveImmersion-${{ matrix.name }}.tar.gz -C dist .
+
+    - name: Archive (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: Compress-Archive -Path dist/bin/* -DestinationPath AutomaticPassiveImmersion-${{ matrix.name }}.zip
+
+    - name: Archive (macOS)
+      if: runner.os == 'macOS'
+      run: ditto -c -k --keepParent dist/AutomaticPassiveImmersion.app AutomaticPassiveImmersion-${{ matrix.name }}.zip
+
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: AutomaticPassiveImmersion-${{ matrix.name }}
+        path: AutomaticPassiveImmersion-${{ matrix.name }}.*

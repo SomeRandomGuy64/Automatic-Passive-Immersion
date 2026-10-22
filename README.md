@@ -1,1 +1,67 @@
 # Automatic-Passive-Immersion
+Plays your passive immersion audio (e.g. condensed audio) on a loop and pauses it automatically whenever something else starts playing, like a YouTube video, an anime episode or a podcast. When the other media stops, passive audio carries on where it left off.
+
+It's a small GUI app for Windows, macOS and Linux that sits in the system tray. It's a rewrite of my old Linux-only daemon (Go + `playerctl` + a systemd service).
+
+## Features
+- Pick the audio folder in the GUI. Every file in it is played on a loop, shuffled by default.
+- A global hotkey (default `Ctrl+Alt+P`) pauses and resumes passive audio from any app.
+- Auto-pause while other media plays, resuming a configurable number of seconds after it goes quiet.
+- "Never pause for" list (e.g. `discord, steam`) so voice chat or games don't count as media.
+- Tray icon whose colour shows the state: green = playing, amber = other media playing, blue = paused by you, grey = stopped.
+- Launch at login, starting hidden in the tray.
+- Portable mode: an empty `PassiveImmersion.ini` next to the executable makes the app keep its settings there instead of in your user config folder.
+- If mpv crashes it's restarted automatically, and mpv never outlives the app.
+
+## How "something else is playing" is detected
+| OS | Method |
+|---|---|
+| Linux | Asks every MPRIS media player on D-Bus for its status, like `playerctl -a status` (browsers, VLC, Spotify, mpv with [mpv-mpris](https://github.com/hoyon/mpv-mpris)...) |
+| Windows | Windows audio sessions: any app with an active audio stream that's actually making sound |
+| macOS | Core Audio's per-process "is running output" flag (**macOS 14.2 or newer**) |
+
+On Windows and macOS this means *anything* making sound counts, including games and notification sounds. Use the resume delay and the "Never pause for" list to tune it.
+
+Run `AutomaticPassiveImmersion --list-playing` to print what the detector currently sees. It's handy for checking detection on a new machine.
+
+## Requirements
+[mpv](https://mpv.io) does the actual playback. Install it normally or drop `mpv`/`mpv.exe` next to the app. The app looks next to itself, then on `PATH`, then in common install folders (Homebrew, `/Applications/mpv.app`, Program Files, Scoop). You can also set the path under **Advanced**.
+
+## Settings under Advanced
+- **mpv executable**: override the auto-detected mpv.
+- **Extra mpv arguments**: passed straight to mpv, e.g. `--volume=70`.
+- **Keys to press on start**: sent to mpv once it starts, e.g. `ctrl+p` to start an mpv tracking script.
+
+## Known limitations
+- Global hotkeys don't work on Wayland (only X11, Windows and macOS). Use the tray menu instead.
+- On Linux, `Ctrl+Alt+F1`-`F12` can't be used as the hotkey because they switch virtual terminal.
+- The macOS build isn't signed, so the first time you open it right-click the app → Open (or run `xattr -dr com.apple.quarantine AutomaticPassiveImmersion.app`).
+
+## Building
+Needs CMake 3.21+, a C++23 compiler and Qt 6.5+ (built and tested with Qt 6.10.3). [QHotkey](https://github.com/Skycoder42/QHotkey) is fetched automatically.
+
+On Linux you also need the X11 development headers (`libx11-dev` on Debian/Ubuntu).
+
+```
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/Qt/6.10.3/<compiler>
+cmake --build build --config Release
+```
+
+To make a portable folder with Qt bundled next to the app (uses `windeployqt`/`macdeployqt`/Qt's Linux deploy tool). The prefix has to be an absolute path or Qt's deploy step fails:
+```
+cmake --install build --config Release --prefix "/absolute/path/to/dist"
+```
+
+Every push and pull request is built on Windows, macOS and Linux by GitHub Actions. The portable builds can be downloaded from each run's artifacts.
+
+### Code layout
+```
+src/main.cpp                                  entry point, command line, single instance
+src/PassiveImmersion/ImmersionController.*    the "daemon": polls the detector, decides when mpv pauses
+src/PassiveImmersion/MpvPlayer.*              launches mpv and talks to it over its JSON IPC
+src/PassiveImmersion/MediaDetector.h          interface each OS implements
+src/PassiveImmersion/Platform/<OS>/           Linux (MPRIS), Windows (WASAPI), macOS (Core Audio) detectors
+src/PassiveImmersion/MainWindow.*             settings/status window and tray icon
+src/PassiveImmersion/Settings.*               ini-backed settings (portable mode lives here)
+src/PassiveImmersion/Autostart.*              launch at login for each OS
+```
