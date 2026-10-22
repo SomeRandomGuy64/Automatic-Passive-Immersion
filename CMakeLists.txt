@@ -103,7 +103,12 @@ set_target_properties(AutomaticPassiveImmersion PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
 )
 
-# `cmake --install build --prefix dist` produces a self-contained folder with Qt copied next to the app
+# `cmake --install build --prefix <absolute path>` produces a self-contained folder with Qt copied next to the app.
+# Windows gets a flat folder (exe next to its DLLs), which is what people expect from a portable Windows app.
+if(PI_PLATFORM_WINDOWS)
+    set(CMAKE_INSTALL_BINDIR "." CACHE PATH "Executables go in the root of the portable folder" FORCE)
+endif()
+
 include(GNUInstallDirs)
 
 install(TARGETS AutomaticPassiveImmersion
@@ -117,3 +122,9 @@ qt_generate_deploy_app_script(
     NO_UNSUPPORTED_PLATFORM_ERROR
 )
 install(SCRIPT ${deployScript})
+
+# Ship the MSVC runtime too, so the app runs on PCs without the Visual C++ Redistributable installed
+if(MSVC)
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ${CMAKE_INSTALL_BINDIR})
+    include(InstallRequiredSystemLibraries)
+endif()
