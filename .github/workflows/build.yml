@@ -58,20 +58,6 @@ jobs:
     - name: Make portable folder
       run: cmake --install build --config Release --prefix "${{ github.workspace }}/dist"
 
-    # --list-playing starts the app, runs the OS's media detector once and exits: proves it links and loads
-    - name: Smoke test (Linux)
-      if: runner.os == 'Linux'
-      run: xvfb-run -a ./dist/bin/AutomaticPassiveImmersion --list-playing
-
-    - name: Smoke test (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
-      run: ./dist/bin/AutomaticPassiveImmersion.exe --list-playing
-
-    - name: Smoke test (macOS)
-      if: runner.os == 'macOS'
-      run: ./dist/AutomaticPassiveImmersion.app/Contents/MacOS/AutomaticPassiveImmersion --list-playing
-
     # Archived by hand: upload-artifact's own zipping drops the symlinks and exec bits a .app needs
     - name: Archive (Linux)
       if: runner.os == 'Linux'
@@ -80,11 +66,35 @@ jobs:
     - name: Archive (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: Compress-Archive -Path dist/bin/* -DestinationPath AutomaticPassiveImmersion-${{ matrix.name }}.zip
+      run: Compress-Archive -Path dist/* -DestinationPath AutomaticPassiveImmersion-${{ matrix.name }}.zip
 
     - name: Archive (macOS)
       if: runner.os == 'macOS'
       run: ditto -c -k --keepParent dist/AutomaticPassiveImmersion.app AutomaticPassiveImmersion-${{ matrix.name }}.zip
+
+    # Smoke tests run from a fresh copy of the archive, so they check exactly what gets downloaded.
+    # --list-playing starts the app, runs the OS's media detector once and exits.
+    - name: Smoke test (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        mkdir smoke && tar -xzf AutomaticPassiveImmersion-${{ matrix.name }}.tar.gz -C smoke
+        xvfb-run -a ./smoke/bin/AutomaticPassiveImmersion --list-playing
+
+    - name: Smoke test (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      timeout-minutes: 2
+      run: |
+        Expand-Archive AutomaticPassiveImmersion-${{ matrix.name }}.zip -DestinationPath smoke
+        if (-not (Test-Path smoke/vcruntime140.dll)) { Write-Error "MSVC runtime missing from the zip"; exit 1 }
+        $app = Start-Process -FilePath smoke/AutomaticPassiveImmersion.exe -ArgumentList "--list-playing" -Wait -PassThru -NoNewWindow
+        if ($app.ExitCode -ne 0) { Write-Error "App exited with $($app.ExitCode)"; exit 1 }
+
+    - name: Smoke test (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        ditto -x -k AutomaticPassiveImmersion-${{ matrix.name }}.zip smoke
+        ./smoke/AutomaticPassiveImmersion.app/Contents/MacOS/AutomaticPassiveImmersion --list-playing
 
     - name: Upload
       uses: actions/upload-artifact@v4
