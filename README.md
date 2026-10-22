@@ -47,9 +47,9 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/Qt/6
 cmake --build build --config Release
 ```
 
-To make a portable folder with Qt bundled next to the app (uses `windeployqt`/`macdeployqt`/Qt's Linux deploy tool):
+To make a portable folder with Qt bundled next to the app (uses `windeployqt`/`macdeployqt`/Qt's Linux deploy tool). The prefix has to be an absolute path or Qt's deploy step fails:
 ```
-cmake --install build --config Release --prefix dist
+cmake --install build --config Release --prefix "/absolute/path/to/dist"
 ```
 
 Every push and pull request is built on Windows, macOS and Linux by GitHub Actions. The portable builds can be downloaded from each run's artifacts.
