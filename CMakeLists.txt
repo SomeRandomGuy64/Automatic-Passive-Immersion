@@ -13,6 +13,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(compiler_options)
 include(platform_detection)
 
+# Windows gets a flat portable folder (exe next to its DLLs), which is what people expect on Windows.
+# This has to happen before Qt is found: Qt's deploy tool locks in the install layout during qt_standard_project_setup()
+if(PI_PLATFORM_WINDOWS)
+    set(CMAKE_INSTALL_BINDIR "." CACHE PATH "Executables go in the root of the portable folder" FORCE)
+endif()
+
 set(QT_COMPONENTS Core Gui Widgets Network)
 if(PI_PLATFORM_LINUX)
     list(APPEND QT_COMPONENTS DBus)
@@ -103,12 +109,7 @@ set_target_properties(AutomaticPassiveImmersion PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/cmake/MacOSXBundleInfo.plist.in"
 )
 
-# `cmake --install build --prefix <absolute path>` produces a self-contained folder with Qt copied next to the app.
-# Windows gets a flat folder (exe next to its DLLs), which is what people expect from a portable Windows app.
-if(PI_PLATFORM_WINDOWS)
-    set(CMAKE_INSTALL_BINDIR "." CACHE PATH "Executables go in the root of the portable folder" FORCE)
-endif()
-
+# `cmake --install build --prefix <absolute path>` produces a self-contained folder with Qt copied next to the app
 include(GNUInstallDirs)
 
 install(TARGETS AutomaticPassiveImmersion
