@@ -73,7 +73,13 @@ jobs:
       run: ditto -c -k --keepParent dist/AutomaticPassiveImmersion.app AutomaticPassiveImmersion-${{ matrix.name }}.zip
 
     # Smoke tests run from a fresh copy of the archive, so they check exactly what gets downloaded.
+    # The Qt install is hidden first: otherwise the app quietly loads Qt from it (it's on PATH and is Qt's
+    # built-in fallback) and a package with missing pieces still passes.
     # --list-playing starts the app, runs the OS's media detector once and exits.
+    - name: Hide the Qt install
+      shell: bash
+      run: mv "$QT_ROOT_DIR" "$QT_ROOT_DIR-hidden"
+
     - name: Smoke test (Linux)
       if: runner.os == 'Linux'
       run: |
@@ -86,7 +92,9 @@ jobs:
       timeout-minutes: 2
       run: |
         Expand-Archive AutomaticPassiveImmersion-${{ matrix.name }}.zip -DestinationPath smoke
-        if (-not (Test-Path smoke/vcruntime140.dll)) { Write-Error "MSVC runtime missing from the zip"; exit 1 }
+        foreach ($file in "vcruntime140.dll", "Qt6Core.dll", "qt.conf") {
+          if (-not (Test-Path "smoke/$file")) { Write-Error "$file isn't next to the exe in the zip"; exit 1 }
+        }
         $app = Start-Process -FilePath smoke/AutomaticPassiveImmersion.exe -ArgumentList "--list-playing" -Wait -PassThru -NoNewWindow
         if ($app.ExitCode -ne 0) { Write-Error "App exited with $($app.ExitCode)"; exit 1 }
 
