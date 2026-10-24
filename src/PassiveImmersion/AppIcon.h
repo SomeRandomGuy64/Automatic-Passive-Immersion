@@ -7,7 +7,7 @@
 namespace PassiveImmersion {
 
 	// Draws the window/tray icon at runtime so the tray shows the current state at a glance
-	// (green play = playing, amber pause = other media playing, blue pause = paused by you, grey = stopped)
+	// (green play = playing, amber play = playing quietly under other media, amber pause = other media playing, blue pause = paused by you, grey = stopped)
 	class AppIcon {
 
 	public:

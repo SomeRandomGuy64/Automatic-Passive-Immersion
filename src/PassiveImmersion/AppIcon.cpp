@@ -10,6 +10,7 @@ namespace PassiveImmersion {
 
 		switch (state) {
 			case ImmersionController::State::Playing:		return QColor{ 0x2e, 0x9d, 0x5b };
+			case ImmersionController::State::Ducked:
 			case ImmersionController::State::AutoPaused:	return QColor{ 0xe0, 0x9a, 0x1f };
 			case ImmersionController::State::UserPaused:	return QColor{ 0x3b, 0x7d, 0xd8 };
 			case ImmersionController::State::Starting:
@@ -35,7 +36,7 @@ namespace PassiveImmersion {
 		painter.setBrush(Qt::white);
 		qreal unit{ size / 16.0 };
 
-		if (state == ImmersionController::State::Playing) {
+		if (state == ImmersionController::State::Playing || state == ImmersionController::State::Ducked) {
 			QPainterPath triangle{};
 			triangle.moveTo(6.0 * unit, 4.5 * unit);
 			triangle.lineTo(12.0 * unit, 8.0 * unit);
