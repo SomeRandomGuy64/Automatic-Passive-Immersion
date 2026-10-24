@@ -30,7 +30,8 @@ namespace PassiveImmersion {
 		void add(const QString& fileName, const QDateTime& start, const QDateTime& end);
 
 		// Which day of the log a moment belongs to
-		QDate getLogDate(const QDateTime& time) const;
+		inline QDate getLogDate(const QDateTime& time) const { return getLogDate(time, m_dayStart); }
+		static QDate getLogDate(const QDateTime& time, const QTime& dayStart);
 
 		qint64 getTodayMs() const;
 		inline qint64 getTotalMs() const { return m_totalMs; }

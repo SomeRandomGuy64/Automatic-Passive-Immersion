@@ -336,6 +336,7 @@ namespace PassiveImmersion {
 		m_trackSubcategoryCombo->addItem("None (unassigned)", QVariant::fromValue(static_cast<int>(Settings::TrackSubcategory::None)));
 		m_trackSubcategoryCombo->addItem("This one:", QVariant::fromValue(static_cast<int>(Settings::TrackSubcategory::Fixed)));
 		m_trackSubcategoryCombo->addItem("The audio file's name", QVariant::fromValue(static_cast<int>(Settings::TrackSubcategory::FileName)));
+		m_trackSubcategoryCombo->addItem("The day of the week", QVariant::fromValue(static_cast<int>(Settings::TrackSubcategory::DayOfWeek)));
 		m_trackSubcategoryCombo->setToolTip("Track allows 30 sub-categories per category. Past that, hours go to unassigned.");
 
 		m_trackSubcategoryNameEdit = new QLineEdit{};

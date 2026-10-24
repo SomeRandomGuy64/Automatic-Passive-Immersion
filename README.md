@@ -10,7 +10,7 @@ It's a small GUI app for Windows, macOS and Linux that sits in the system tray. 
 - Or turn passive audio down instead of pausing (ducking), so a notification sound doesn't stop everything. "Turn it down, then pause" ducks first and only pauses if the other media keeps playing, rewinding over the part that played quietly.
 - An hour counter: today's and total passive hours in the window and the tray menu. Only time at full volume counts. You choose when a new day starts (midnight by default, or e.g. 04:00 if you listen past midnight).
 - Export your hours to CSV, one row per day or per day and file.
-- Optional logging to [fazon.nexus Track](https://fazon.nexus/developers/): paste an API key and passive hours go to Track by themselves, under no sub-category, one you name, or the audio file's name.
+- Optional logging to [fazon.nexus Track](https://fazon.nexus/developers/): paste an API key and passive hours go to Track by themselves, under no sub-category, one you name, the audio file's name, or the day of the week (Monday, Tuesday...).
 - Checks GitHub for a new release once a day and offers to download it.
 - "Never pause for" list (e.g. `discord, steam`) so voice chat or games don't count as media.
 - Tray icon whose colour shows the state: green = playing, amber = other media playing (play symbol while turned down, pause symbol while paused), blue = paused by you, grey = stopped.

@@ -26,6 +26,7 @@ namespace PassiveImmersion {
 		std::pair{ Settings::TrackSubcategory::None, "none" },
 		std::pair{ Settings::TrackSubcategory::Fixed, "fixed" },
 		std::pair{ Settings::TrackSubcategory::FileName, "fileName" },
+		std::pair{ Settings::TrackSubcategory::DayOfWeek, "dayOfWeek" },
 	};
 
 	template<typename Enum, size_t Count>

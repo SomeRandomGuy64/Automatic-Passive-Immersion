@@ -82,11 +82,11 @@ namespace PassiveImmersion {
 
 	}
 
-	QDate HourLog::getLogDate(const QDateTime& time) const {
+	QDate HourLog::getLogDate(const QDateTime& time, const QTime& dayStart) {
 
 		QDateTime local{ time.toLocalTime() };
 		QDate date{ local.date() };
-		return local.time() < m_dayStart ? date.addDays(-1) : date;
+		return local.time() < dayStart ? date.addDays(-1) : date;
 
 	}
 

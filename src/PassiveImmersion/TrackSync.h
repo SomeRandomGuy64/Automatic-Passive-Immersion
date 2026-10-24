@@ -69,7 +69,7 @@ namespace PassiveImmersion {
 		void m_onReplyFinished(QNetworkReply* reply);
 		bool m_handleCommonErrors(QNetworkReply* reply, int status, const QString& message);
 
-		QString m_getSubcategoryFor(const QString& fileName) const;
+		QString m_getSubcategoryFor(const QString& fileName, const QDate& logDate) const;
 		bool m_isUnavailable(const QString& name) const;
 		bool m_canSend() const;
 		void m_stop(const QString& error = {});

@@ -1,6 +1,7 @@
 #include "TrackSync.h"
 
 #include "PassiveImmersion/Core.h"
+#include "PassiveImmersion/HourLog.h"
 
 #include <QDir>
 #include <QEventLoop>
@@ -14,6 +15,7 @@
 #include <QTimeZone>
 
 #include <algorithm>
+#include <array>
 
 namespace PassiveImmersion {
 
@@ -25,6 +27,9 @@ namespace PassiveImmersion {
 	static constexpr int s_syncIntervalMs{ 5 * 60'000 };
 	static constexpr int s_requestTimeoutMs{ 15'000 };
 	static constexpr int s_maxSubcategoryLength{ 40 };
+
+	// English whatever the system language is, so the sub-categories match the site's wording
+	static constexpr std::array s_dayNames{ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
 
 	static QString getQueuePath() {
 		return QDir{ Settings::getDataDirectory() }.filePath("track-queue.json");
@@ -88,15 +93,17 @@ namespace PassiveImmersion {
 			return;
 		}
 
-		QString subcategory{ m_getSubcategoryFor(fileName) };
-
-		// Split the stretch wherever it crosses into the next Track week
+		// Split the stretch wherever it crosses into the next Track week, or the next day of the hour log
+		// (which changes the sub-category when it's the day of the week)
 		QDateTime from{ start.toUTC() };
 		QDateTime until{ end.toUTC() };
 
 		while (from < until) {
+			QDate logDate{ HourLog::getLogDate(from, m_settings.dayStartTime) };
+			QDateTime nextLogDay{ QDateTime{ logDate.addDays(1), m_settings.dayStartTime }.toUTC() };
 			QDateTime nextWeek{ getWeekStart(from).addDays(7) };
-			QDateTime pieceEnd{ std::min(until, nextWeek) };
+			QDateTime pieceEnd{ std::min({ until, nextWeek, nextLogDay }) };
+			QString subcategory{ m_getSubcategoryFor(fileName, logDate) };
 
 			qint64 ms{ from.msecsTo(pieceEnd) };
 			if (ms <= 0) {
@@ -390,7 +397,7 @@ namespace PassiveImmersion {
 
 	}
 
-	QString TrackSync::m_getSubcategoryFor(const QString& fileName) const {
+	QString TrackSync::m_getSubcategoryFor(const QString& fileName, const QDate& logDate) const {
 
 		switch (m_settings.trackSubcategory) {
 			case Settings::TrackSubcategory::None:
@@ -401,6 +408,9 @@ namespace PassiveImmersion {
 
 			case Settings::TrackSubcategory::FileName:
 				return cleanSubcategoryName(fileName);
+
+			case Settings::TrackSubcategory::DayOfWeek:
+				return s_dayNames[logDate.dayOfWeek() - 1];
 		}
 
 		return {};

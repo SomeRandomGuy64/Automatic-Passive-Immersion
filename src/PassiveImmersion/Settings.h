@@ -19,7 +19,8 @@ namespace PassiveImmersion {
 		enum class TrackSubcategory {
 			None,		// the passive category's unassigned hours
 			Fixed,		// trackSubcategoryName
-			FileName	// the audio file's name
+			FileName,	// the audio file's name
+			DayOfWeek	// "Monday", "Tuesday"... (the day of the hour log, so it follows dayStartTime)
 		};
 
 		// Folder of audio to loop through (e.g. condensed audio)
