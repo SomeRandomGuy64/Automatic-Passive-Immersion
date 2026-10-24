@@ -27,6 +27,8 @@ namespace PassiveImmersion {
 	static constexpr int s_pauseObserverId{ 1 };
 	static constexpr int s_titleObserverId{ 2 };
 	static constexpr int s_pidRequestId{ 3 };
+	static constexpr int s_volumeObserverId{ 4 };
+	static constexpr int s_fileNameObserverId{ 5 };
 
 	static constexpr int s_connectIntervalMs{ 200 };
 	static constexpr int s_maxConnectAttempts{ 50 };	// 10 seconds
@@ -157,6 +159,22 @@ namespace PassiveImmersion {
 		m_sendCommand({ "set_property", "pause", paused });
 	}
 
+	void MpvPlayer::setDucked(bool ducked, int percent) {
+
+		if (ducked == m_ducked && percent == m_duckPercent) {
+			return;
+		}
+
+		m_ducked = ducked;
+		m_duckPercent = percent;
+		m_applyVolume();
+
+	}
+
+	void MpvPlayer::seekRelative(double seconds) {
+		m_sendCommand({ "seek", seconds, "relative" });
+	}
+
 	QString MpvPlayer::findMpv(const QString& configuredPath) {
 
 		if (!configuredPath.isEmpty()) {
@@ -225,6 +243,8 @@ namespace PassiveImmersion {
 
 		m_sendCommand({ "observe_property", s_pauseObserverId, "pause" });
 		m_sendCommand({ "observe_property", s_titleObserverId, "media-title" });
+		m_sendCommand({ "observe_property", s_volumeObserverId, "volume" });
+		m_sendCommand({ "observe_property", s_fileNameObserverId, "filename/no-ext" });
 
 		// If mpv was started through a launcher/shim the process we spawned isn't the one playing audio,
 		// so ask mpv for its own PID - that's the one the media detectors will see
@@ -274,6 +294,27 @@ namespace PassiveImmersion {
 				m_mediaTitle = message.value("data").toString();
 				emit mediaTitleChanged(m_mediaTitle);
 			}
+			else if (id == s_fileNameObserverId) {
+				QString fileName{ message.value("data").toString() };
+				if (fileName != m_fileName) {
+					m_fileName = fileName;
+					emit fileNameChanged(m_fileName);
+				}
+			}
+			else if (id == s_volumeObserverId) {
+				double volume{ message.value("data").toDouble(-1.0) };
+				bool isOurDuck{ m_duckedVolume >= 0.0 && qFuzzyCompare(volume, m_duckedVolume) };
+
+				// The first report is the volume mpv started with (100, or --volume from the extra arguments).
+				// After that a change only counts as the new normal volume if we weren't the ones turning it down.
+				if (m_volume < 0.0) {
+					m_volume = volume;
+					m_applyVolume();
+				}
+				else if (!m_ducked && !isOurDuck) {
+					m_volume = volume;
+				}
+			}
 		}
 		else if (message.value("request_id").toInt() == s_pidRequestId && message.value("error").toString() == "success") {
 			m_processId = message.value("data").toInteger(m_processId);
@@ -294,6 +335,23 @@ namespace PassiveImmersion {
 
 		// MPV IPC requires a newline-terminated JSON payload
 		m_socket.write(QJsonDocument{ request }.toJson(QJsonDocument::Compact) + '\n');
+
+	}
+
+	void MpvPlayer::m_applyVolume() {
+
+		if (m_volume < 0.0) {
+			// Not known yet, this runs again once mpv reports it
+			return;
+		}
+
+		if (m_ducked) {
+			m_duckedVolume = m_volume * m_duckPercent / 100.0;
+			m_sendCommand({ "set_property", "volume", m_duckedVolume });
+		}
+		else {
+			m_sendCommand({ "set_property", "volume", m_volume });
+		}
 
 	}
 
@@ -358,6 +416,11 @@ namespace PassiveImmersion {
 		m_stopRequested = false;
 		m_processId = 0;
 		m_mediaTitle.clear();
+		m_fileName.clear();
+		m_volume = -1.0;
+		m_duckedVolume = -1.0;
+		m_ducked = false;
+		m_duckPercent = 100;
 
 	}
 

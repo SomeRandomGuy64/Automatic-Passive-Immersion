@@ -1,9 +1,12 @@
 #include "PassiveImmersion/Core.h"
+#include "PassiveImmersion/HourLog.h"
 #include "PassiveImmersion/ImmersionController.h"
 #include "PassiveImmersion/MainWindow.h"
 #include "PassiveImmersion/MediaDetector.h"
 #include "PassiveImmersion/Settings.h"
 #include "PassiveImmersion/SingleInstance.h"
+#include "PassiveImmersion/TrackSync.h"
+#include "PassiveImmersion/UpdateChecker.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -123,11 +126,32 @@ int main(int argc, char* argv[]) {
 
 	Settings settings{ Settings::load() };
 
+	// Declared before the controller so they outlive it: it reports its last bit of listening as it shuts down
+	HourLog hourLog{};
+	hourLog.setDayStart(settings.dayStartTime);
+	TrackSync trackSync{ settings };
+	UpdateChecker updateChecker{};
+	updateChecker.setEnabled(settings.checkForUpdates);
+
 	ImmersionController controller{ settings };
-	MainWindow window{ controller, settings };
+	MainWindow window{ controller, hourLog, trackSync, updateChecker, settings };
+
+	QObject::connect(&controller, &ImmersionController::listened, &hourLog, &HourLog::add);
+	QObject::connect(&controller, &ImmersionController::listened, &trackSync, &TrackSync::add);
+
+	// Send to Track as soon as playback stops rather than waiting for the next 5-minute sync
+	QObject::connect(&controller, &ImmersionController::stateChanged, &trackSync, [&controller, &trackSync]() {
+		if (controller.getState() == ImmersionController::State::Stopped) {
+			trackSync.sync();
+		}
+	});
 
 	QObject::connect(&instance, &SingleInstance::activationRequested, &window, &MainWindow::showAndRaise);
 	QObject::connect(&app, &QApplication::aboutToQuit, &controller, &ImmersionController::stop);
+	QObject::connect(&app, &QApplication::aboutToQuit, &trackSync, [&trackSync]() {
+		// Whatever doesn't make it in time stays queued on disk for next launch
+		trackSync.flush(3000);
+	});
 
 	if (!parser.isSet(minimisedOption) || !hasTray) {
 		window.show();

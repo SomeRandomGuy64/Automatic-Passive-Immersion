@@ -4,6 +4,7 @@
 #include "PassiveImmersion/MpvPlayer.h"
 #include "PassiveImmersion/Settings.h"
 
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QHotkey>
 #include <QObject>
@@ -25,6 +26,7 @@ namespace PassiveImmersion {
 			Stopped,
 			Starting,
 			Playing,
+			Ducked,			// other media is playing, passive audio carries on quietly
 			AutoPaused,		// other media is playing
 			UserPaused		// paused with the hotkey / button / tray
 		};
@@ -53,11 +55,17 @@ namespace PassiveImmersion {
 		void errorOccurred(const QString& message);
 		void hotkeyRegistrationChanged(bool registered);
 
+		// Passive audio played at full volume between start and end (UTC). Sent at least every 30 seconds while
+		// it plays, and whenever it stops or moves on to the next file.
+		void listened(const QString& fileName, const QDateTime& start, const QDateTime& end);
+
 	private:
 		void m_startPlayer();
 		void m_poll();
 		void m_updatePlayerPause();
 		void m_updateState();
+		void m_updateListening();
+		void m_commitListening();
 		void m_registerHotkey();
 		void m_fail(const QString& message);
 
@@ -65,6 +73,7 @@ namespace PassiveImmersion {
 		void m_onPlayerStopped(const QString& error);
 
 		bool m_isIgnored(const MediaSource& source) const;
+		bool m_shouldPauseForOtherMedia() const;
 
 	private:
 		Settings m_settings{};
@@ -78,11 +87,18 @@ namespace PassiveImmersion {
 		QElapsedTimer m_playerUptime{};
 		QElapsedTimer m_sinceOtherMedia{};			// time since other media was last heard
 		bool m_otherMediaPlaying{ false };			// stays true for resumeDelaySeconds after it goes quiet
+		QElapsedTimer m_otherMediaClock{};			// time since m_otherMediaPlaying last became true
 		std::vector<MediaSource> m_activeSources{};
 		std::vector<MediaSource> m_reportedSources{};	// what the last stateChanged() was sent with
 
 		bool m_userPaused{ false };
 		bool m_expectedPause{ true };				// what we last told mpv, so pauses from elsewhere can be spotted
+		bool m_ducked{ false };
+
+		// Listening time, only counted while passive audio plays at full volume
+		QTimer m_listenCommitTimer{};
+		QElapsedTimer m_listenClock{};				// invalid while not listening
+		QString m_listenFile{};
 
 		State m_state{ State::Stopped };
 		QString m_lastError{};

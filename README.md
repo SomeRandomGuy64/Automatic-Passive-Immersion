@@ -7,8 +7,13 @@ It's a small GUI app for Windows, macOS and Linux that sits in the system tray. 
 - Pick the audio folder in the GUI. Every file in it is played on a loop, shuffled by default.
 - A global hotkey (default `Ctrl+Alt+P`) pauses and resumes passive audio from any app.
 - Auto-pause while other media plays, resuming a configurable number of seconds after it goes quiet.
+- Or turn passive audio down instead of pausing (ducking), so a notification sound doesn't stop everything. "Turn it down, then pause" ducks first and only pauses if the other media keeps playing, rewinding over the part that played quietly.
+- An hour counter: today's and total passive hours in the window and the tray menu. Only time at full volume counts. You choose when a new day starts (midnight by default, or e.g. 04:00 if you listen past midnight).
+- Export your hours to CSV, one row per day or per day and file.
+- Optional logging to [fazon.nexus Track](https://fazon.nexus/developers/): paste an API key and passive hours go to Track by themselves, under no sub-category, one you name, the audio file's name, or the day of the week (Monday, Tuesday...).
+- Checks GitHub for a new release once a day and offers to download it.
 - "Never pause for" list (e.g. `discord, steam`) so voice chat or games don't count as media.
-- Tray icon whose colour shows the state: green = playing, amber = other media playing, blue = paused by you, grey = stopped.
+- Tray icon whose colour shows the state: green = playing, amber = other media playing (play symbol while turned down, pause symbol while paused), blue = paused by you, grey = stopped.
 - Launch at login, starting hidden in the tray.
 - Portable mode: an empty `PassiveImmersion.ini` next to the executable makes the app keep its settings there instead of in your user config folder.
 - If mpv crashes it's restarted automatically, and mpv never outlives the app.
@@ -20,12 +25,17 @@ It's a small GUI app for Windows, macOS and Linux that sits in the system tray. 
 | Windows | Windows audio sessions: any app with an active audio stream that's actually making sound |
 | macOS | Core Audio's per-process "is running output" flag (**macOS 14.2 or newer**) |
 
-On Windows and macOS this means *anything* making sound counts, including games and notification sounds. Use the resume delay and the "Never pause for" list to tune it.
+On Windows and macOS this means *anything* making sound counts, including games and notification sounds. Use "Turn it down, then pause", the resume delay and the "Never pause for" list to tune it.
 
 Run `AutomaticPassiveImmersion --list-playing` to print what the detector currently sees. It's handy for checking detection on a new machine.
 
 ## Requirements
 [mpv](https://mpv.io) does the actual playback. Install it normally or drop `mpv`/`mpv.exe` next to the app. The app looks next to itself, then on `PATH`, then in common install folders (Homebrew, `/Applications/mpv.app`, Program Files, Scoop). You can also set the path under **Advanced**.
+
+## Hours and fazon.nexus Track
+Hours are kept in `passive-hours.json` in the app's data folder (next to the executable in portable mode), per day and per file. **Export...** on the Hours tab writes them out as CSV.
+
+To log to Track, create a *Read & write* key on your fazon.nexus profile (Developers section), tick **Log passive hours to Track automatically** and paste the key. Hours go to the `passive` category of the Track week they happened in, every 5 minutes, when playback stops and when the app quits. Anything that can't be sent yet (offline, a revoked key) waits in `track-queue.json` and goes next time. Track allows 30 sub-categories per category: with "The audio file's name", files past that limit are logged as unassigned. The key is stored in the settings ini, which is made readable by your user only.
 
 ## Settings under Advanced
 - **mpv executable**: override the auto-detected mpv.
@@ -62,6 +72,9 @@ src/PassiveImmersion/MpvPlayer.*              launches mpv and talks to it over 
 src/PassiveImmersion/MediaDetector.h          interface each OS implements
 src/PassiveImmersion/Platform/<OS>/           Linux (MPRIS), Windows (WASAPI), macOS (Core Audio) detectors
 src/PassiveImmersion/MainWindow.*             settings/status window and tray icon
+src/PassiveImmersion/HourLog.*                daily/per-file hour log and CSV export
+src/PassiveImmersion/TrackSync.*              sends hours to the fazon.nexus Track API, with an on-disk queue
+src/PassiveImmersion/UpdateChecker.*          asks GitHub for the latest release
 src/PassiveImmersion/Settings.*               ini-backed settings (portable mode lives here)
 src/PassiveImmersion/Autostart.*              launch at login for each OS
 ```

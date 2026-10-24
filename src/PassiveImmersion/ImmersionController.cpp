@@ -15,6 +15,12 @@ namespace PassiveImmersion {
 	static constexpr int s_minUptimeForRestartMs{ 10'000 };
 	static constexpr int s_restartDelayMs{ 3'000 };
 
+	static constexpr int s_listenCommitIntervalMs{ 30'000 };
+
+	// A commit never covers more than this. If the computer slept mid-play the monotonic clock may still
+	// have counted the sleep on some systems, and that time shouldn't land in anyone's hour log.
+	static constexpr qint64 s_maxListenCommitMs{ 2 * s_listenCommitIntervalMs };
+
 	static bool hasSameNames(const std::vector<MediaSource>& a, const std::vector<MediaSource>& b) {
 		return std::ranges::equal(a, b, [](const MediaSource& x, const MediaSource& y) { return x.name == y.name; });
 	}
@@ -27,6 +33,7 @@ namespace PassiveImmersion {
 		m_pollTimer.setInterval(s_pollIntervalMs);
 		m_restartTimer.setInterval(s_restartDelayMs);
 		m_restartTimer.setSingleShot(true);
+		m_listenCommitTimer.setInterval(s_listenCommitIntervalMs);
 
 		connect(&m_pollTimer, &QTimer::timeout, this, &ImmersionController::m_poll);
 		connect(&m_restartTimer, &QTimer::timeout, this, &ImmersionController::m_startPlayer);
@@ -34,6 +41,8 @@ namespace PassiveImmersion {
 		connect(&m_player, &MpvPlayer::pauseChanged, this, &ImmersionController::m_onPlayerPauseChanged);
 		connect(&m_player, &MpvPlayer::stopped, this, &ImmersionController::m_onPlayerStopped);
 		connect(&m_player, &MpvPlayer::mediaTitleChanged, this, &ImmersionController::stateChanged);
+		connect(&m_player, &MpvPlayer::fileNameChanged, this, &ImmersionController::m_updateListening);
+		connect(&m_listenCommitTimer, &QTimer::timeout, this, &ImmersionController::m_commitListening);
 		connect(&m_hotkey, &QHotkey::activated, this, &ImmersionController::togglePause);
 
 		m_registerHotkey();
@@ -64,7 +73,11 @@ namespace PassiveImmersion {
 
 		if (playerOptionsChanged && m_player.isRunning()) {
 			m_startPlayer();
+			return;
 		}
+
+		m_updatePlayerPause();
+		m_updateState();
 
 	}
 
@@ -83,6 +96,7 @@ namespace PassiveImmersion {
 
 		m_userPaused = false;
 		m_otherMediaPlaying = false;
+		m_ducked = false;
 		m_activeSources.clear();
 
 		m_updateState();
@@ -128,6 +142,7 @@ namespace PassiveImmersion {
 		// mpv starts paused, the first poll unpauses it unless something else is already playing
 		m_expectedPause = true;
 		m_otherMediaPlaying = false;
+		m_ducked = false;
 		m_activeSources.clear();
 
 		m_player.start(options);
@@ -149,6 +164,9 @@ namespace PassiveImmersion {
 		std::erase_if(sources, [this](const MediaSource& source) { return m_isIgnored(source); });
 
 		if (!sources.empty()) {
+			if (!m_otherMediaPlaying) {
+				m_otherMediaClock.start();
+			}
 			m_activeSources = std::move(sources);
 			m_otherMediaPlaying = true;
 			m_sinceOtherMedia.restart();
@@ -169,11 +187,21 @@ namespace PassiveImmersion {
 			return;
 		}
 
-		bool shouldPause{ m_userPaused || m_otherMediaPlaying };
+		bool shouldPause{ m_userPaused || m_shouldPauseForOtherMedia() };
+		bool shouldDuck{ !shouldPause && m_otherMediaPlaying };
+
 		if (shouldPause != m_expectedPause) {
+			// Ducking turned into a pause: go back over what played quietly so none of it is missed
+			if (shouldPause && m_ducked && !m_userPaused) {
+				m_player.seekRelative(-m_otherMediaClock.elapsed() / 1000.0);
+			}
+
 			m_expectedPause = shouldPause;
 			m_player.setPaused(shouldPause);
 		}
+
+		m_ducked = shouldDuck;
+		m_player.setDucked(shouldDuck, m_settings.duckVolumePercent);
 
 	}
 
@@ -190,7 +218,7 @@ namespace PassiveImmersion {
 			state = State::UserPaused;
 		}
 		else if (m_otherMediaPlaying) {
-			state = State::AutoPaused;
+			state = m_ducked ? State::Ducked : State::AutoPaused;
 		}
 		else {
 			state = State::Playing;
@@ -201,6 +229,43 @@ namespace PassiveImmersion {
 			m_reportedSources = m_activeSources;
 			emit stateChanged();
 		}
+
+		m_updateListening();
+
+	}
+
+	void ImmersionController::m_updateListening() {
+
+		const QString& fileName{ m_player.getFileName() };
+		bool listening{ m_state == State::Playing && !m_player.isPaused() && !fileName.isEmpty() };
+
+		if (m_listenClock.isValid() && (!listening || fileName != m_listenFile)) {
+			m_commitListening();
+			m_listenClock.invalidate();
+			m_listenCommitTimer.stop();
+		}
+
+		if (listening && !m_listenClock.isValid()) {
+			m_listenFile = fileName;
+			m_listenClock.start();
+			m_listenCommitTimer.start();
+		}
+
+	}
+
+	void ImmersionController::m_commitListening() {
+
+		if (!m_listenClock.isValid()) {
+			return;
+		}
+
+		qint64 elapsedMs{ std::min(m_listenClock.restart(), s_maxListenCommitMs) };
+		if (elapsedMs <= 0) {
+			return;
+		}
+
+		QDateTime end{ QDateTime::currentDateTimeUtc() };
+		emit listened(m_listenFile, end.addMSecs(-elapsedMs), end);
 
 	}
 
@@ -257,6 +322,27 @@ namespace PassiveImmersion {
 		else {
 			m_fail(error);
 		}
+
+	}
+
+	bool ImmersionController::m_shouldPauseForOtherMedia() const {
+
+		if (!m_otherMediaPlaying) {
+			return false;
+		}
+
+		switch (m_settings.otherMediaAction) {
+			case Settings::OtherMediaAction::Pause:
+				return true;
+
+			case Settings::OtherMediaAction::Duck:
+				return false;
+
+			case Settings::OtherMediaAction::DuckThenPause:
+				return m_otherMediaClock.elapsed() >= m_settings.duckPauseAfterSeconds * 1000;
+		}
+
+		return true;
 
 	}
 

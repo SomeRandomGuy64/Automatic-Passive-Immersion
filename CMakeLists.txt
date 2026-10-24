@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(AutomaticPassiveImmersion
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Plays passive immersion audio and pauses it whenever other media is playing"
     LANGUAGES CXX
 )
@@ -44,6 +44,15 @@ qt_add_executable(AutomaticPassiveImmersion WIN32 MACOSX_BUNDLE
 
     src/PassiveImmersion/ImmersionController.h
     src/PassiveImmersion/ImmersionController.cpp
+
+    src/PassiveImmersion/HourLog.h
+    src/PassiveImmersion/HourLog.cpp
+
+    src/PassiveImmersion/TrackSync.h
+    src/PassiveImmersion/TrackSync.cpp
+
+    src/PassiveImmersion/UpdateChecker.h
+    src/PassiveImmersion/UpdateChecker.cpp
 
     src/PassiveImmersion/MainWindow.h
     src/PassiveImmersion/MainWindow.cpp
