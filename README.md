@@ -64,6 +64,12 @@ cmake --install build --config Release --prefix "/absolute/path/to/dist"
 
 Every push and pull request is built on Windows, macOS and Linux by GitHub Actions. The portable builds can be downloaded from each run's artifacts.
 
+### Releasing
+1. Bump `VERSION` in `CMakeLists.txt` and rewrite `release-notes.md` for the new version.
+2. Merge that into `main`, then tag it: `git tag v0.3.0 && git push origin v0.3.0`.
+
+The tag builds and smoke-tests all three platforms, then publishes a GitHub release with `release-notes.md`, the three archives and their SHA-256 checksums. The tag has to match `VERSION` or the build stops. Keep the archive names as they are: the app's update check looks for them.
+
 ### Code layout
 ```
 src/main.cpp                                  entry point, command line, single instance
