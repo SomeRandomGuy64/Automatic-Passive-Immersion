@@ -23,7 +23,7 @@ jobs:
             name: windows-x64
             qt-arch: win64_msvc2022_64
             cmake-args: ""
-          - os: macos-14
+          - os: macos-15
             name: macos-universal
             qt-arch: clang_64
             cmake-args: '"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"'

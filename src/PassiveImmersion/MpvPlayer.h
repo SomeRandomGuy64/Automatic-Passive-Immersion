@@ -44,6 +44,14 @@ namespace PassiveImmersion {
 
 		void seekRelative(double seconds);
 
+		// Brings mpv's playlist in line with the files now in the folder: new ones go in (somewhere still to come this
+		// time round when shuffling, in name order otherwise) and entries whose file is gone come out. Does nothing
+		// until mpv has reported its playlist.
+		void syncPlaylist(const QStringList& files, const QString& directory, bool shuffle);
+
+		inline bool isPlaylistKnown() const { return m_playlistKnown; }
+		inline qsizetype getPlaylistSize() const { return m_playlist.size(); }
+
 		inline bool isRunning() const { return m_process.state() != QProcess::NotRunning; }
 		inline bool isConnected() const { return m_socket.state() == QLocalSocket::ConnectedState; }
 		inline bool isPaused() const { return m_paused; }
@@ -60,6 +68,10 @@ namespace PassiveImmersion {
 		void pauseChanged(bool paused);
 		void mediaTitleChanged(const QString& title);
 		void fileNameChanged(const QString& fileName);
+		void playlistChanged();
+
+		// The file extensions mpv will load from a folder, if this mpv version says (0.38+)
+		void extensionsReported(const QStringList& extensions);
 
 	private:
 		void m_tryConnect();
@@ -89,6 +101,11 @@ namespace PassiveImmersion {
 		int64_t m_processId{};
 		QString m_mediaTitle{};
 		QString m_fileName{};
+
+		QStringList m_playlist{};		// file names as mpv has them, kept in step locally between its reports
+		qsizetype m_playlistPos{ -1 };
+		bool m_playlistKnown{ false };
+		QStringList m_audioExts{};
 
 		double m_volume{ -1.0 };		// the normal (not ducked) volume, negative until mpv reports it
 		double m_duckedVolume{ -1.0 };	// what we last turned it down to, so mpv echoing it back isn't mistaken for a new volume
