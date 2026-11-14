@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PassiveImmersion/FolderWatcher.h"
 #include "PassiveImmersion/MediaDetector.h"
 #include "PassiveImmersion/MpvPlayer.h"
 #include "PassiveImmersion/Settings.h"
@@ -71,6 +72,7 @@ namespace PassiveImmersion {
 
 		void m_onPlayerPauseChanged(bool paused);
 		void m_onPlayerStopped(const QString& error);
+		void m_onFolderScanned(const QStringList& files);
 
 		bool m_isIgnored(const MediaSource& source) const;
 		bool m_shouldPauseForOtherMedia() const;
@@ -78,6 +80,8 @@ namespace PassiveImmersion {
 	private:
 		Settings m_settings{};
 		MpvPlayer m_player{};
+		FolderWatcher m_folderWatcher{};
+		bool m_folderWasEmpty{ false };				// so mpv can be started again once files turn up in an empty folder
 		std::unique_ptr<MediaDetector> m_detector{};
 		QHotkey m_hotkey{};
 		bool m_hotkeyRegistered{ false };

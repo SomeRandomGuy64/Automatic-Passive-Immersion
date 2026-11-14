@@ -42,6 +42,8 @@ namespace PassiveImmersion {
 		connect(&m_player, &MpvPlayer::stopped, this, &ImmersionController::m_onPlayerStopped);
 		connect(&m_player, &MpvPlayer::mediaTitleChanged, this, &ImmersionController::stateChanged);
 		connect(&m_player, &MpvPlayer::fileNameChanged, this, &ImmersionController::m_updateListening);
+		connect(&m_player, &MpvPlayer::extensionsReported, &m_folderWatcher, &FolderWatcher::setExtensions);
+		connect(&m_folderWatcher, &FolderWatcher::scanned, this, &ImmersionController::m_onFolderScanned);
 		connect(&m_listenCommitTimer, &QTimer::timeout, this, &ImmersionController::m_commitListening);
 		connect(&m_hotkey, &QHotkey::activated, this, &ImmersionController::togglePause);
 
@@ -92,6 +94,7 @@ namespace PassiveImmersion {
 
 		m_restartTimer.stop();
 		m_pollTimer.stop();
+		m_folderWatcher.stop();
 		m_player.stop();
 
 		m_userPaused = false;
@@ -122,12 +125,14 @@ namespace PassiveImmersion {
 		m_lastError.clear();
 
 		if (m_settings.audioDirectory.isEmpty() || !QDir{ m_settings.audioDirectory }.exists()) {
+			m_folderWatcher.stop();
 			m_fail("Choose an audio folder that exists first.");
 			return;
 		}
 
 		QString mpvPath{ MpvPlayer::findMpv(m_settings.mpvPath) };
 		if (mpvPath.isEmpty()) {
+			m_folderWatcher.stop();
 			m_fail("Couldn't find mpv. Install it from https://mpv.io (or put it next to this app), or set its path under Advanced.");
 			return;
 		}
@@ -146,6 +151,8 @@ namespace PassiveImmersion {
 		m_activeSources.clear();
 
 		m_player.start(options);
+		m_folderWatcher.start(m_settings.audioDirectory);
+		m_folderWasEmpty = !m_folderWatcher.hasFiles();
 		m_playerUptime.start();
 		m_pollTimer.start();
 		m_updateState();
@@ -322,6 +329,23 @@ namespace PassiveImmersion {
 		else {
 			m_fail(error);
 		}
+
+	}
+
+	void ImmersionController::m_onFolderScanned(const QStringList& files) {
+
+		if (m_player.isConnected()) {
+			m_player.syncPlaylist(files, m_settings.audioDirectory, m_settings.shuffle);
+		}
+		else if (m_folderWasEmpty && !files.isEmpty() && !m_player.isRunning() && !m_restartTimer.isActive()
+			&& !m_lastError.isEmpty()) {
+			// mpv gives up straight away on a folder with nothing to play, so go again now there's something
+			qInfo() << "Files turned up in the audio folder, starting mpv again";
+			m_startPlayer();
+			return;
+		}
+
+		m_folderWasEmpty = files.isEmpty();
 
 	}
 

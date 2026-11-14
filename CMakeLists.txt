@@ -40,6 +40,9 @@ qt_add_executable(AutomaticPassiveImmersion WIN32 MACOSX_BUNDLE
     src/PassiveImmersion/MpvPlayer.h
     src/PassiveImmersion/MpvPlayer.cpp
 
+    src/PassiveImmersion/FolderWatcher.h
+    src/PassiveImmersion/FolderWatcher.cpp
+
     src/PassiveImmersion/MediaDetector.h
 
     src/PassiveImmersion/ImmersionController.h

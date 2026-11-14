@@ -1,12 +1,20 @@
 #include "MpvPlayer.h"
 
 #include "PassiveImmersion/Core.h"
+#include "PassiveImmersion/FolderWatcher.h"
 
+#include <QCollator>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
+#include <QRandomGenerator>
+#include <QSet>
 #include <QStandardPaths>
+
+#include <algorithm>
+#include <ranges>
 
 #ifdef PI_PLATFORM_WINDOWS
 	#ifndef NOMINMAX
@@ -29,6 +37,9 @@ namespace PassiveImmersion {
 	static constexpr int s_pidRequestId{ 3 };
 	static constexpr int s_volumeObserverId{ 4 };
 	static constexpr int s_fileNameObserverId{ 5 };
+	static constexpr int s_playlistObserverId{ 6 };
+	static constexpr int s_audioExtsRequestId{ 7 };
+	static constexpr int s_videoExtsRequestId{ 8 };
 
 	static constexpr int s_connectIntervalMs{ 200 };
 	static constexpr int s_maxConnectAttempts{ 50 };	// 10 seconds
@@ -175,6 +186,85 @@ namespace PassiveImmersion {
 		m_sendCommand({ "seek", seconds, "relative" });
 	}
 
+	void MpvPlayer::syncPlaylist(const QStringList& files, const QString& directory, bool shuffle) {
+
+		if (!isConnected() || !m_playlistKnown) {
+			return;
+		}
+
+		// Out: entries whose file or folder is gone. The one playing is left to finish, it goes on a later pass.
+		for (qsizetype i{ m_playlist.size() - 1 }; i >= 0; --i) {
+			if (i != m_playlistPos && !QFileInfo::exists(m_playlist[i])) {
+				qInfo() << "Removing from playlist:" << m_playlist[i];
+				m_sendCommand({ "playlist-remove", i });
+				m_playlist.removeAt(i);
+				if (i < m_playlistPos) {
+					--m_playlistPos;
+				}
+			}
+		}
+
+		// Older mpv versions leave a subfolder as one entry and only open it up when it's reached,
+		// so a file counts as already there if it or any folder above it (inside the audio folder) is in the playlist
+		QSet<QString> known{};
+		for (const QString& entry : m_playlist) {
+			known.insert(FolderWatcher::pathKey(entry));
+		}
+		QString rootKey{ FolderWatcher::pathKey(directory) };
+
+		auto isKnown{ [&](const QString& file) {
+			QString key{ FolderWatcher::pathKey(file) };
+			while (key.size() > rootKey.size()) {
+				if (known.contains(key)) {
+					return true;
+				}
+				key = key.left(key.lastIndexOf('/'));
+			}
+			return false;
+		} };
+
+		QStringList added{};
+		for (const QString& file : files) {
+			if (!isKnown(file)) {
+				added.append(file);
+			}
+		}
+
+		if (added.isEmpty()) {
+			return;
+		}
+
+		QCollator collator{};
+		collator.setNumericMode(true);
+		std::ranges::sort(added, [&](const QString& a, const QString& b) { return collator.compare(a, b) < 0; });
+
+		// In: appended, then moved into place. (loadfile's own insert-at only exists from mpv 0.38.)
+		for (const QString& file : added) {
+			qsizetype target{};
+			if (shuffle) {
+				// Somewhere after the current file, so a new file is heard this time round rather than after a whole loop
+				qsizetype first{ m_playlistPos + 1 };
+				target = first + QRandomGenerator::global()->bounded(m_playlist.size() - first + 1);
+			}
+			else {
+				auto after{ std::ranges::find_if(m_playlist, [&](const QString& entry) { return collator.compare(entry, file) > 0; }) };
+				target = std::distance(m_playlist.begin(), after);
+			}
+
+			qInfo() << "Adding to playlist:" << file << "at" << target;
+			m_sendCommand({ "loadfile", file, "append" });
+			if (target != m_playlist.size()) {
+				m_sendCommand({ "playlist-move", m_playlist.size(), target });
+			}
+
+			m_playlist.insert(target, file);
+			if (target <= m_playlistPos) {
+				++m_playlistPos;
+			}
+		}
+
+	}
+
 	QString MpvPlayer::findMpv(const QString& configuredPath) {
 
 		if (!configuredPath.isEmpty()) {
@@ -245,6 +335,9 @@ namespace PassiveImmersion {
 		m_sendCommand({ "observe_property", s_titleObserverId, "media-title" });
 		m_sendCommand({ "observe_property", s_volumeObserverId, "volume" });
 		m_sendCommand({ "observe_property", s_fileNameObserverId, "filename/no-ext" });
+		m_sendCommand({ "observe_property", s_playlistObserverId, "playlist" });
+		m_sendCommand({ "get_property", "audio-exts" }, s_audioExtsRequestId);
+		m_sendCommand({ "get_property", "video-exts" }, s_videoExtsRequestId);
 
 		// If mpv was started through a launcher/shim the process we spawned isn't the one playing audio,
 		// so ask mpv for its own PID - that's the one the media detectors will see
@@ -301,6 +394,19 @@ namespace PassiveImmersion {
 					emit fileNameChanged(m_fileName);
 				}
 			}
+			else if (id == s_playlistObserverId) {
+				m_playlist.clear();
+				m_playlistPos = -1;
+				for (const QJsonValue& entry : message.value("data").toArray()) {
+					QJsonObject object{ entry.toObject() };
+					if (object.value("current").toBool()) {
+						m_playlistPos = m_playlist.size();
+					}
+					m_playlist.append(object.value("filename").toString());
+				}
+				m_playlistKnown = true;
+				emit playlistChanged();
+			}
 			else if (id == s_volumeObserverId) {
 				double volume{ message.value("data").toDouble(-1.0) };
 				bool isOurDuck{ m_duckedVolume >= 0.0 && qFuzzyCompare(volume, m_duckedVolume) };
@@ -318,6 +424,21 @@ namespace PassiveImmersion {
 		}
 		else if (message.value("request_id").toInt() == s_pidRequestId && message.value("error").toString() == "success") {
 			m_processId = message.value("data").toInteger(m_processId);
+		}
+		else if (message.value("request_id").toInt() == s_audioExtsRequestId && message.value("error").toString() == "success") {
+			// Held until video-exts arrives, mpv loads both from a folder (audio still plays from video files with --no-video)
+			m_audioExts.clear();
+			for (const QJsonValue& extension : message.value("data").toArray()) {
+				m_audioExts.append(extension.toString());
+			}
+		}
+		else if (message.value("request_id").toInt() == s_videoExtsRequestId && message.value("error").toString() == "success"
+			&& !m_audioExts.isEmpty()) {
+			QStringList extensions{ m_audioExts };
+			for (const QJsonValue& extension : message.value("data").toArray()) {
+				extensions.append(extension.toString());
+			}
+			emit extensionsReported(extensions);
 		}
 
 	}
@@ -417,6 +538,10 @@ namespace PassiveImmersion {
 		m_processId = 0;
 		m_mediaTitle.clear();
 		m_fileName.clear();
+		m_playlist.clear();
+		m_playlistPos = -1;
+		m_playlistKnown = false;
+		m_audioExts.clear();
 		m_volume = -1.0;
 		m_duckedVolume = -1.0;
 		m_ducked = false;

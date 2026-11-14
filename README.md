@@ -4,7 +4,7 @@ Plays your passive immersion audio (e.g. condensed audio) on a loop and pauses i
 It's a small GUI app for Windows, macOS and Linux that sits in the system tray. It's a rewrite of my old Linux-only daemon (Go + `playerctl` + a systemd service).
 
 ## Features
-- Pick the audio folder in the GUI. Every file in it is played on a loop, shuffled by default.
+- Pick the audio folder in the GUI. Every file in it is played on a loop, shuffled by default. Files added to (or deleted from) the folder while it plays are picked up within a couple of seconds, no restart needed.
 - A global hotkey (default `Ctrl+Alt+P`) pauses and resumes passive audio from any app.
 - Auto-pause while other media plays, resuming a configurable number of seconds after it goes quiet.
 - Or turn passive audio down instead of pausing (ducking), so a notification sound doesn't stop everything. "Turn it down, then pause" ducks first and only pauses if the other media keeps playing, rewinding over the part that played quietly.
