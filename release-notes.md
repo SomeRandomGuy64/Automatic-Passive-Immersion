@@ -1,12 +1,11 @@
-## What's new in 0.2.0
-- **Turn it down instead of pausing.** *When other media plays* now has three choices: pause (as before, still the default), turn passive audio down, or turn it down and only pause if the other media keeps playing. In the last mode, passive audio rewinds over the part that played quietly, so you don't miss it. A notification sound no longer stops everything on Windows and macOS.
-- **Hour counter.** Today's and total passive hours show on the new Hours tab and in the tray menu. Only time playing at full volume counts. You choose when a new day starts (midnight by default, or e.g. 04:00 if you listen past midnight).
-- **Export your hours** to CSV, one row per day or per day and file.
-- **fazon.nexus Track.** Paste a Read & write API key from your profile and passive hours are logged to Track by themselves, under no sub-category, one you name, the audio file's name, or the day of the week. Anything that can't be sent yet waits and goes later.
-- **Update check.** Once a day the app checks for a new release and offers to download it (you can turn this off on the General tab).
-- Settings are now split into tabs, so the window fits on small screens.
+## What's new in 0.3.0
+- **New files are picked up while it plays.** Drop audio into the folder (or a subfolder) and it joins the playlist within a couple of seconds, no restart needed. With shuffle on it goes in somewhere still to come this time round, so you hear it before the whole loop repeats; with shuffle off it slots in by name.
+- **Deleted files drop out** of the playlist too. One that's playing is allowed to finish first.
+- **Files still being copied wait** until the copy has finished, so a half-copied file never plays.
+- **An empty folder starts playing by itself** as soon as the first file lands in it, instead of stopping with an error.
+- Folders on network drives that don't report changes are rescanned once a minute.
 
-0.1.0 doesn't have the update check, so this one update has to be downloaded by hand. Settings carry over.
+Settings carry over. 0.2.0 offers this update on its own; 0.1.0 has to be updated by hand.
 
 ## Downloads
 | OS | File | How to run |
@@ -26,4 +25,4 @@ All three are portable: Qt is bundled, nothing needs installing. To update, quit
 - **Linux:** needs `libxcb-cursor0` (installed by default on most desktops). Global hotkeys work on X11 only; on Wayland use the tray menu.
 
 ## Status
-Fully tested on Linux. The Windows and macOS builds are built, launched and smoke-tested in CI. Real-world detection and hotkey behaviour on those two hasn't been tried on a physical machine yet, so please open an issue if something misbehaves.
+Fully tested on Linux, including the new folder watching. The Windows and macOS builds are built, launched and smoke-tested in CI. Real-world detection and hotkey behaviour on those two hasn't been tried on a physical machine yet, so please open an issue if something misbehaves.
