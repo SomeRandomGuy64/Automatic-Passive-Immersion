@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
 
+# Without this the macOS build only runs on the build machine's own macOS version or newer.
+# 14.2 is what the media detector needs (kAudioHardwarePropertyProcessObjectList), must be set before project()
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14.2" CACHE STRING "Oldest macOS the app runs on")
+
 project(AutomaticPassiveImmersion
-    VERSION 0.2.0
+    VERSION 0.3.0
     DESCRIPTION "Plays passive immersion audio and pauses it whenever other media is playing"
     LANGUAGES CXX
 )
